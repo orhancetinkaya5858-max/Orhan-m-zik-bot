@@ -14,12 +14,14 @@ from telegram.ext import (
 
 TOKEN = os.getenv("BOT_TOKEN")
 
-# YouTube indirici ayarları
+# YOUTUBE TAMAMEN İPTAL - SADECE SOUNDCLOUD
 YDL_OPTS = {
     "format": "bestaudio/best",
     "quiet": True,
     "no_warnings": True,
     "noplaylist": True,
+    "default_search": "scsearch", # SADECE SoundCloud araması yapar
+    "nocheckcertificate": True,
     "postprocessors": [{
         "key": "FFmpegExtractAudio",
         "preferredcodec": "mp3",
@@ -34,60 +36,72 @@ def download_song(query: str):
     opts = dict(YDL_OPTS)
     opts["outtmpl"] = outtmpl
 
+    # YouTube'u tamamen baypas ediyoruz, direkt SoundCloud üzerinden aratıyoruz
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+        try:
+            # Buradaki arama terimi başına 'scsearch1:' ekleyerek YouTube'a gitmesini engelliyoruz
+            info = ydl.extract_info(f"scsearch1:{query}", download=True)
+        except Exception as e:
+            print(f"Arama hatası: {e}")
+            return None, None
 
-    entry = info["entries"][0]
-    for f in os.listdir(tmpdir):
-        if f.endswith(".mp3"):
-            return os.path.join(tmpdir, f), entry.get("title")
+    if info and "entries" in info and len(info["entries"]) > 0:
+        entry = info["entries"][0]
+        for f in os.listdir(tmpdir):
+            if f.endswith(".mp3"):
+                return os.path.join(tmpdir, f), entry.get("title")
 
     return None, None
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldin Orhan usta! Şarkı adını yaz.")
-
+    await update.message.reply_text("Selamı kısaltmayalım Allah'ın selamını tam verelim lütfen 😊\n\nHoş geldin Orhan usta! Şarkı adını yaz, SoundCloud üzerinden bulup getireyim.")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.message.text.strip()
+    # Selam kontrolü
+    text = update.message.text.lower()
+    if text in ["s.a", "slm", "sa", "selam"]:
+        await update.message.reply_text("Selamı kısaltmayalım Allah'ın selamını tam verelim lütfen 😊")
+        return
 
-    msg = await update.message.reply_text("🔍 Arıyorum...")
+    query = update.message.text.strip()
+    msg = await update.message.reply_text("🔍 SoundCloud üzerinden arıyorum abi...")
 
     loop = asyncio.get_running_loop()
+    mp3_path = None
     try:
         mp3_path, title = await loop.run_in_executor(None, download_song, query)
 
         if not mp3_path:
-            await msg.edit_text("Şarkıyı bulamadım kardeşim.")
+            await msg.edit_text("Şarkıyı SoundCloud üzerinde bulamadım usta.")
             return
 
-        await msg.edit_text("Gönderiyorum...")
+        await msg.edit_text("Buldum! İndirip gönderiyorum...")
 
         with open(mp3_path, "rb") as f:
             await update.message.reply_audio(audio=f, title=title)
 
         await msg.delete()
 
-    finally:
-        try:
-            shutil.rmtree(os.path.dirname(mp3_path), ignore_errors=True)
-        except:
-            pass
+    except Exception as e:
+        await msg.edit_text(f"Bir hata oluştu: {e}")
 
+    finally:
+        if mp3_path:
+            try:
+                shutil.rmtree(os.path.dirname(mp3_path), ignore_errors=True)
+            except:
+                pass
 
 def main():
     if not TOKEN:
-        raise SystemExit("BOT_TOKEN environment variable eksik!")
+        raise SystemExit("BOT_TOKEN eksik!")
 
     app = ApplicationBuilder().token(TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
-    print("Bot başladı (polling)...")
+    print("Bot SoundCloud modunda hazır!")
     app.run_polling(drop_pending_updates=True)
-
 
 if __name__ == "__main__":
     main()
