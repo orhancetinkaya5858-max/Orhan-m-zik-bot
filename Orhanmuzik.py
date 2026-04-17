@@ -1,93 +1,76 @@
 import os
 import asyncio
-import tempfile
-import shutil
 import yt_dlp
+import uuid
+from fastapi import FastAPI, Request
+from fastapi.responses import Response
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    MessageHandler,
-    ContextTypes,
-    filters,
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-TOKEN = os.getenv("BOT_TOKEN")
+# Render panelindeki BOT_TOKEN kutusundan şifreyi otomatik çeker
+TOKEN = os.environ.get("BOT_TOKEN")
+PORT = int(os.environ.get("PORT", 10000))
+HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME", "drmuzik-bot-1.onrender.com")
+WEBHOOK_URL = f"https://{HOST}/webhook"
 
-# YouTube indirici ayarları
-YDL_OPTS = {
-    "format": "bestaudio/best",
-    "quiet": True,
-    "no_warnings": True,
-    "noplaylist": True,
-    "postprocessors": [{
-        "key": "FFmpegExtractAudio",
-        "preferredcodec": "mp3",
-        "preferredquality": "192",
-    }],
-}
+app = FastAPI()
+application = ApplicationBuilder().token(TOKEN).build()
 
-def download_song(query: str):
-    tmpdir = tempfile.mkdtemp()
-    outtmpl = os.path.join(tmpdir, "%(title)s.%(ext)s")
+async def sarki(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("Şarkı adı yaz kral! Örn: /sarki Azer Bülbül")
+        return
 
-    opts = dict(YDL_OPTS)
-    opts["outtmpl"] = outtmpl
+    query = " ".join(context.args)
+    temp_id = uuid.uuid4().hex[:5]
+    # Telefondan en hızlı ve hatasız inen format
+    out_tmpl = f"track_{temp_id}.%(ext)s"
+    
+    msg = await update.message.reply_text(f"📥 '{query}' aranıyor, az bekle...")
 
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch1:{query}", download=True)
-
-    entry = info["entries"][0]
-    for f in os.listdir(tmpdir):
-        if f.endswith(".mp3"):
-            return os.path.join(tmpdir, f), entry.get("title")
-
-    return None, None
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldin Orhan usta! Şarkı adını yaz.")
-
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.message.text.strip()
-
-    msg = await update.message.reply_text("🔍 Arıyorum...")
-
-    loop = asyncio.get_running_loop()
     try:
-        mp3_path, title = await loop.run_in_executor(None, download_song, query)
+        ydl_opts = {
+            "format": "bestaudio/best",
+            "outtmpl": out_tmpl,
+            "noplaylist": True,
+            "quiet": True,
+            "geo_bypass": True,
+            "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0"
+        }
 
-        if not mp3_path:
-            await msg.edit_text("Şarkıyı bulamadım kardeşim.")
-            return
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch1:{query}", download=True)
+            video_info = info['entries'][0]
+            title = video_info.get("title", "Şarkı")
+            filename = ydl.prepare_filename(video_info)
 
-        await msg.edit_text("Gönderiyorum...")
-
-        with open(mp3_path, "rb") as f:
-            await update.message.reply_audio(audio=f, title=title)
-
+        # Müzik dosyasını gönderiyoruz
+        with open(filename, "rb") as audio:
+            await update.message.reply_audio(audio=audio, title=title, caption=f"🎵 {title} - Dr.Müzik Sunar")
+        
         await msg.delete()
+        if os.path.exists(filename): os.remove(filename)
 
-    finally:
-        try:
-            shutil.rmtree(os.path.dirname(mp3_path), ignore_errors=True)
-        except:
-            pass
+    except Exception as e:
+        print(f"Hata: {e}")
+        await msg.edit_text("❌ İndirme başarısız. YouTube engeline takılmış olabiliriz.")
 
+application.add_handler(CommandHandler("sarki", sarki))
+application.add_handler(CommandHandler("start", lambda u,c: u.message.reply_text("Bot aktif Orhan abi! /sarki yazıp yanına şarkı adını ekle.")))
 
-def main():
-    if not TOKEN:
-        raise SystemExit("BOT_TOKEN environment variable eksik!")
+@app.post("/webhook")
+async def webhook(request: Request):
+    json_data = await request.json()
+    update = Update.de_json(json_data, application.bot)
+    asyncio.create_task(application.process_update(update))
+    return Response(content="OK")
 
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-
-    print("Bot başladı (polling)...")
-    app.run_polling(drop_pending_updates=True)
-
+@app.on_event("startup")
+async def on_startup():
+    await application.initialize()
+    await application.start()
+    await application.bot.set_webhook(url=WEBHOOK_URL)
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=PORT)
