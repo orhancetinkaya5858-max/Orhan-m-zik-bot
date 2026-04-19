@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Selam Orhan abi! SoundCloud sistemi aktif. Şarkı adını yaz, hemen getireyim.")
+    await update.message.reply_text("Hoş geldin! Sanatçı ve şarkı ismini yaz, hemen indirip göndereyim sana. İyi dinlemeler.")
 
 async def download_music(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.message.text
@@ -51,7 +51,7 @@ if __name__ == '__main__':
         print("KRİTİK HATA: BOT_TOKEN Render ortam değişkenlerinde bulunamadı!")
     else:
         app = ApplicationBuilder().token(TOKEN).build()
-        app.add_handler(CommandHandler('start', start))
+        app.add_handler(CommandHandler('müzik', start))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), download_music))
         print("Bot başlatılıyor...")
         app.run_polling()
