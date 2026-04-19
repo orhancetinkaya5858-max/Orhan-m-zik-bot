@@ -51,7 +51,7 @@ if __name__ == '__main__':
         print("KRİTİK HATA: BOT_TOKEN Render ortam değişkenlerinde bulunamadı!")
     else:
         app = ApplicationBuilder().token(TOKEN).build()
-        app.add_handler(CommandHandler('müzik', start))
+        app.add_handler(CommandHandler('muzik', start))
         app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), download_music))
         print("Bot başlatılıyor...")
         app.run_polling()
