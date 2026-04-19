@@ -1,7 +1,7 @@
 import os
 import logging
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 import yt_dlp
 
 # Hataları görmek için loglama
@@ -9,14 +9,25 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 
 TOKEN = os.environ.get("BOT_TOKEN")
 
+# /start komutu için
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldin! Sanatçı ve şarkı ismini yaz, hemen indirip göndereyim sana. İyi dinlemeler.")
+    await update.message.reply_text("Hoş geldin! '/muzik Sanatçı Şarkı' yazarak indirme yapabilirsin.")
 
-async def download_music(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.message.text
+# /muzik komutu için (Tüm mantık burada)
+async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Eğer kullanıcı sadece /muzik yazdıysa uyarı ver
+    if not context.args:
+        await update.message.reply_text("Lütfen bir şarkı ismi yazın. Örnek: /muzik Müslüm Gürses Hatıralar")
+        return
+
+    # Kullanıcının gönderdiği şarkı ismini birleştir
+    query = " ".join(context.args)
     chat_id = update.message.chat_id
     
-    # Kullanıcıya mesaj gönder
+    # İstediğin karşılama mesajı
+    await update.message.reply_text("Hoş geldiniz, istediğiniz müziği hemen gönderiyorum, iyi dinlemeler.")
+    
+    # Aramaya başla
     msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
     
     ydl_opts = {
@@ -51,7 +62,10 @@ if __name__ == '__main__':
         print("KRİTİK HATA: BOT_TOKEN Render ortam değişkenlerinde bulunamadı!")
     else:
         app = ApplicationBuilder().token(TOKEN).build()
-        app.add_handler(CommandHandler('muzik', start))
-        app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), download_music))
+        
+        # Sadece komutları tanımlıyoruz, MessageHandler'ı sildik!
+        app.add_handler(CommandHandler('start', start))
+        app.add_handler(CommandHandler('muzik', handle_muzik))
+        
         print("Bot başlatılıyor...")
         app.run_polling()
