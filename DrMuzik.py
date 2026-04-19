@@ -1,36 +1,34 @@
 import os
-import re
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 import yt_dlp
-from flask import Flask
-from threading import Thread
 
 # Hataları görmek için loglama
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 TOKEN = os.environ.get("BOT_TOKEN")
 
-# Web sunucusu
-app_flask = Flask(__name__)
-@app_flask.route('/')
-def home(): return "Bot ayakta!"
-def run_web(): app_flask.run(host='0.0.0.0', port=8080)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Hoş geldin! '/muzik Sanatçı Şarkı' yazarak indirme yapabilirsin.")
 
 async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Eğer kullanıcı hiçbir şey yazmadıysa uyarı ver
     if not context.args:
-        await update.message.reply_text("Lütfen bir şarkı ismi yazın.")
+        await update.message.reply_text("Lütfen bir şarkı ismi yazın. Örnek: /muzik Müslüm Gürses Hatıralar")
         return
 
+    # Kullanıcının gönderdiği şarkı ismini birleştir
     query = " ".join(context.args)
     chat_id = update.message.chat_id
     
-    msg = await update.message.reply_text(f"🔍 '{query}' indiriliyor...")
+    # Kullanıcıya yanıt ver
+    await update.message.reply_text("Hoş geldiniz, istediğiniz müziği hemen gönderiyorum, iyi dinlemeler.")
+    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
     
     ydl_opts = {
         'format': 'bestaudio/best',
-        'outtmpl': 'temp_music.%(ext)s',
+        'outtmpl': 'music.%(ext)s',
         'default_search': 'scsearch1',
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
@@ -40,35 +38,41 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     try:
+        # İndirme ve Bilgi Çekme
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(query, download=True)
-            if 'entries' in info: info = info['entries'][0]
+            # Eğer liste gelirse ilkini al
+            if 'entries' in info:
+                info = info['entries'][0]
             
-            # Şarkı adını temizle (Dosya sistemine uygun hale getir)
-            title = info.get('title', 'muzik')
-            clean_title = re.sub(r'[\\/*?:"<>|]', "", title)
-            new_filename = f"{clean_title}.mp3"
-            
-            # Dosyayı adlandır
-            os.rename('temp_music.mp3', new_filename)
+            title = info.get('title', 'Bilinmeyen Şarkı')
+            performer = info.get('uploader', 'Bilinmeyen Sanatçı')
 
-        # Dosyayı gönder
-        with open(new_filename, 'rb') as audio_file:
-            await context.bot.send_audio(chat_id=chat_id, audio=audio_file, title=title)
-        
-        await msg.delete()
+        # Dosyayı gönder (Başlık ve Sanatçı bilgisiyle)
+        await context.bot.send_audio(
+            chat_id=chat_id, 
+            audio=open('music.mp3', 'rb'),
+            title=title,
+            performer=performer
+        )
+        await msg.delete() # 'Aranıyor' mesajını sil
         
         # Dosyayı temizle
-        if os.path.exists(new_filename):
-            os.remove(new_filename)
+        if os.path.exists('music.mp3'):
+            os.remove('music.mp3')
             
     except Exception as e:
-        logging.error(f"Hata: {e}")
         await update.message.reply_text(f"Hata oluştu abi: {e}")
 
 if __name__ == '__main__':
-    t = Thread(target=run_web)
-    t.start()
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler('muzik', handle_muzik))
-    app.run_polling()
+    if not TOKEN:
+        print("KRİTİK HATA: BOT_TOKEN Render ortam değişkenlerinde bulunamadı!")
+    else:
+        app = ApplicationBuilder().token(TOKEN).build()
+        
+        # Komutları tanımlıyoruz
+        app.add_handler(CommandHandler('start', start))
+        app.add_handler(CommandHandler('muzik', handle_muzik))
+        
+        print("Bot başlatılıyor...")
+        app.run_polling()
