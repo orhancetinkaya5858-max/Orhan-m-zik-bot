@@ -32,7 +32,7 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ydl_opts = {
             'format': 'bestaudio/best',
             'outtmpl': 'music.%(ext)s',
-            'default_search': 'ytsearch1',
+            'default_search': 'scsearch1', # Sadece SoundCloud araması yapar
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
@@ -47,10 +47,10 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_audio(audio=open(file_path, 'rb'), title=query)
             await msg.delete()
         else:
-            await msg.edit_text("Dosya bulunamadı.")
+            await msg.edit_text("Müzik maalesef bulunamadı.")
 
     except Exception as e:
-        await msg.edit_text(f"Hata: {e}")
+        await msg.edit_text(f"Hata oluştu: {e}")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
