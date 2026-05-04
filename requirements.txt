@@ -2,3 +2,4 @@ python-telegram-bot
 yt-dlp>=2026.01.01
 ffmpeg-python
 flask
+deezer-python
