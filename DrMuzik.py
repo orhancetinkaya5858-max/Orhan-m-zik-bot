@@ -5,10 +5,6 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 import yt_dlp
-from deezer import Client
-
-# Deezer Ayarı
-deezer_client = Client()
 
 app_flask = Flask(__name__)
 @app_flask.route('/')
@@ -21,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı-adı' şeklinde arama yapabilirsiniz.")
+    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı adı' yazarak indirebilirsiniz.")
 
 async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -30,34 +26,31 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     query = " ".join(context.args)
     msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
-    
     file_path = "music.mp3"
 
     try:
-        # Önce Deezer'da ara
-        search = deezer_client.search(query)
-        if search:
-            track = search[0]
-            # En sağlam yöntem: Deezer linkini yt-dlp ile indirmek
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': 'music.%(ext)s',
-                'postprocessors': [{'key': 'FFmpegExtractAudio','preferredcodec': 'mp3','preferredquality': '192'}],
-            }
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([track.link])
-            
-            await update.message.reply_audio(
-                audio=open(file_path, 'rb'),
-                title=track.title,
-                performer=track.artist.name
-            )
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': 'music.%(ext)s',
+            'default_search': 'ytsearch1',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([query])
+
+        if os.path.exists(file_path):
+            await update.message.reply_audio(audio=open(file_path, 'rb'), title=query)
             await msg.delete()
         else:
-            await msg.edit_text("Şarkı bulunamadı.")
-            
+            await msg.edit_text("Dosya bulunamadı.")
+
     except Exception as e:
-        await msg.edit_text(f"Hata oluştu: {e}")
+        await msg.edit_text(f"Hata: {e}")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
