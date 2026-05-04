@@ -1,4 +1,6 @@
 import os
+from py_deezer import Deezer
+deezer_client = Deezer(arl="21b89f42e41e63299105fc9c31ffef9ed21bf6912e767ed862d99d6979c3d5433147d18d5c940cacbdb6a1c61c0ae29e703042c9d19bb82c840743988983d27b471e2fb3b8cd654a5766c1ca54126c93a303a1b986074d1103b66f882b0bee51")
 import logging
 import threading
 from flask import Flask
