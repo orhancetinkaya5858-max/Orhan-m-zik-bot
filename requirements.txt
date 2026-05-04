@@ -1,6 +1,5 @@
-
 python-telegram-bot
-yt-dlp>=2026.01.01
+yt-dlp
 ffmpeg-python
 flask
 deezer-python
