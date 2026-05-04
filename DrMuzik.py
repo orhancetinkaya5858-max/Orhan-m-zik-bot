@@ -5,11 +5,10 @@ from flask import Flask
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 import yt_dlp
-from deezer import Client # Kütüphane ismini listene göre düzelttim
+from deezer import Client
 
-# Deezer Kurulumu
-arl_code = "21b89f42e41e63299105fc9c31ffef9ed21bf6912e767ed862d99d6979c3d5433147d18d5c940cacbdb6a1c61c0ae29e703042c9d19bb82c840743988983d27b471e2fb3b8cd654a5766c1ca54126c93a303a1b986074d1103b66f882b0bee51"
-deezer_client = Client(max_retries=3) # Standart deezer-python kullanımı
+# Deezer Ayarı
+deezer_client = Client()
 
 app_flask = Flask(__name__)
 @app_flask.route('/')
@@ -22,7 +21,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldiniz! '/muzik Sanatçı Şarkı' yazarak indirme yapabilirsiniz.")
+    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı-adı' şeklinde arama yapabilirsiniz.")
 
 async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -30,17 +29,16 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor, lütfen bekleyin...")
+    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
     
     file_path = "music.mp3"
 
     try:
-        # DEEZER ARAMA
-        search_results = deezer_client.search(query)
-        if search_results:
-            track = search_results[0]
-            # Not: deezer-python indirme için track.preview kullanabilir veya yt-dlp'ye paslayabilir
-            # En sağlamı: Deezer linkini yt-dlp ile indirmek
+        # Önce Deezer'da ara
+        search = deezer_client.search(query)
+        if search:
+            track = search[0]
+            # En sağlam yöntem: Deezer linkini yt-dlp ile indirmek
             ydl_opts = {
                 'format': 'bestaudio/best',
                 'outtmpl': 'music.%(ext)s',
@@ -56,10 +54,10 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await msg.delete()
         else:
-            await msg.edit_text("Maalesef şarkı bulunamadı.")
+            await msg.edit_text("Şarkı bulunamadı.")
             
     except Exception as e:
-        await msg.edit_text(f"Bir hata oluştu: {e}")
+        await msg.edit_text(f"Hata oluştu: {e}")
     finally:
         if os.path.exists(file_path): os.remove(file_path)
 
