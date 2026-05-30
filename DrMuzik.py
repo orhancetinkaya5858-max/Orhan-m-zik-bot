@@ -17,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı adı' yazarak en hızlı şekilde indirebilirsiniz.")
+    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı adı' yazarak indirebilirsiniz.")
 
 async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -25,35 +25,56 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor ve doğrudan indiriliyor...")
+    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
+    
+    # Dosya adı şablonu
     output_template = "music_file.%(ext)s"
 
     try:
         ydl_opts = {
-            'format': 'bestaudio/best',
+            # SoundCloud araması için en stabil format ayarı
+            'format': 'bestaudio', 
             'outtmpl': output_template,
-            'default_search': 'scsearch1',
+            'default_search': 'scsearch',
+            'noplaylist': True,
             'nocheckcertificate': True,
-            'external_downloader_args': ['-loglevel', 'panic'],
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(query, download=True)
-            filename = ydl.prepare_filename(info)
+            # Şarkıyı aratıp indiriyoruz
+            info = ydl.extract_info(f"scsearch1:{query}", download=True)
+            
+            if 'entries' in info and len(info['entries']) > 0:
+                video_info = info['entries'][0]
+                filename = ydl.prepare_filename(video_info)
+                title = video_info.get('title', query)
+                performer = video_info.get('uploader', 'SoundCloud')
+            else:
+                filename = ydl.prepare_filename(info)
+                title = info.get('title', query)
+                performer = info.get('uploader', 'SoundCloud')
 
-        if os.path.exists(filename):
+        # İndirilen dosyanın uzantısını bulup kontrol ediyoruz
+        actual_filename = None
+        for f in os.listdir('.'):
+            if f.startswith("music_file."):
+                actual_filename = f
+                break
+
+        if actual_filename and os.path.exists(actual_filename):
             await update.message.reply_audio(
-                audio=open(filename, 'rb'), 
-                title=info.get('title', query),
-                performer=info.get('uploader', 'SoundCloud')
+                audio=open(actual_filename, 'rb'), 
+                title=title,
+                performer=performer
             )
             await msg.delete()
-            os.remove(filename)
+            os.remove(actual_filename)
         else:
             await msg.edit_text("Müzik dosyası bulunamadı.")
 
     except Exception as e:
         await msg.edit_text(f"Hata oluştu: {e}")
+        # Kalıntı dosya varsa temizle
         for f in os.listdir('.'):
             if f.startswith("music_file."):
                 try: os.remove(f)
