@@ -17,7 +17,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 TOKEN = os.environ.get("BOT_TOKEN")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı adı' yazarak indirebilirsiniz.")
+    await update.message.reply_text("Hoş geldiniz! '/muzik şarkı adı' yazarak en hızlı şekilde indirebilirsiniz.")
 
 async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -25,34 +25,39 @@ async def handle_muzik(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     query = " ".join(context.args)
-    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor...")
-    file_path = "music.mp3"
+    msg = await update.message.reply_text(f"🔍 '{query}' aranıyor ve doğrudan indiriliyor...")
+    output_template = "music_file.%(ext)s"
 
     try:
         ydl_opts = {
             'format': 'bestaudio/best',
-            'outtmpl': 'music.%(ext)s',
-            'default_search': 'scsearch1', # Sadece SoundCloud araması yapar
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }],
+            'outtmpl': output_template,
+            'default_search': 'scsearch1',
+            'nocheckcertificate': True,
+            'external_downloader_args': ['-loglevel', 'panic'],
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([query])
+            info = ydl.extract_info(query, download=True)
+            filename = ydl.prepare_filename(info)
 
-        if os.path.exists(file_path):
-            await update.message.reply_audio(audio=open(file_path, 'rb'), title=query)
+        if os.path.exists(filename):
+            await update.message.reply_audio(
+                audio=open(filename, 'rb'), 
+                title=info.get('title', query),
+                performer=info.get('uploader', 'SoundCloud')
+            )
             await msg.delete()
+            os.remove(filename)
         else:
-            await msg.edit_text("Müzik maalesef bulunamadı.")
+            await msg.edit_text("Müzik dosyası bulunamadı.")
 
     except Exception as e:
         await msg.edit_text(f"Hata oluştu: {e}")
-    finally:
-        if os.path.exists(file_path): os.remove(file_path)
+        for f in os.listdir('.'):
+            if f.startswith("music_file."):
+                try: os.remove(f)
+                except: pass
 
 if __name__ == '__main__':
     threading.Thread(target=run_web, daemon=True).start()
